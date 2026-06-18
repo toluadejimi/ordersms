@@ -36,6 +36,7 @@
 </a>
 
         <a href="/admin/settings" class="block px-4 py-2 rounded hover:bg-blue-800 text-white">⚙️ Settings</a>
+        <a href="{{ route('admin.logs') }}" class="block px-4 py-2 rounded hover:bg-blue-800 {{ request()->routeIs('admin.logs') ? 'bg-blue-800 text-white font-medium' : 'text-white' }}">📋 Log Viewer</a>
         <form method="POST" action="{{ route('admin.logout') }}">
             @csrf
             <button type="submit" class="w-full text-left px-4 py-2 text-red-500 hover:bg-red-100 rounded">🔒 Logout</button>
@@ -59,6 +60,7 @@
         <a href="/admin/verifications" class="block px-4 py-2 rounded hover:bg-blue-800 text-white">✅ Verifications</a>
         <a href="{{ route('admin.visitors.track') }}" class="block px-4 py-2 rounded hover:bg-blue-800 text-white">📊 Track Visitors</a>
         <a href="/admin/settings" class="block px-4 py-2 rounded hover:bg-blue-800 text-white">⚙️ Settings</a>
+        <a href="{{ route('admin.logs') }}" class="block px-4 py-2 rounded hover:bg-blue-800 {{ request()->routeIs('admin.logs') ? 'bg-blue-800 text-white font-medium' : 'text-white' }}">📋 Log Viewer</a>
         <form method="POST" action="{{ route('admin.logout') }}">
             @csrf
             <button type="submit" class="w-full text-left px-4 py-2 text-red-500 hover:bg-red-100 rounded">🔒 Logout</button>

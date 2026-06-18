@@ -263,6 +263,7 @@ Route::prefix('admin')->name('admin.')->group(function () {
         Route::post('/manual-funding-account', [ManualFundingAccountController::class, 'store'])->name('manual.account.store');
         Route::post('/manual-fundings/{id}/approve', [AdminController::class, 'approveManualFunding'])->name('manual-fundings.approve');
         Route::post('/manual-fundings/{id}/reject', [AdminController::class, 'rejectManualFunding'])->name('manual-fundings.reject');
+        Route::get('/logs', [\Rap2hpoutre\LaravelLogViewer\LogViewerController::class, 'index'])->name('logs');
     });
 });
 Route::view('/privacy', 'privacy')->name('privacy');

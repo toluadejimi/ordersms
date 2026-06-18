@@ -17,6 +17,7 @@ use App\Mail\WalletFundedUserMail;
 use App\Mail\WalletFundedAdminMail;
 use App\Mail\ManualFundingSubmittedMail;
 use App\Services\TelegramService;
+use App\Services\SprintpayLogger;
 
 class FundingController extends Controller
 {
@@ -229,6 +230,7 @@ class FundingController extends Controller
         $webkey = $this->getSprintpayWebkey();
 
         if (!$webkey) {
+            SprintpayLogger::warning('redirect', 'Credit blocked: SprintPay webkey not configured.');
             return back()->with('error', 'SprintPay is not configured.');
         }
 
@@ -240,6 +242,14 @@ class FundingController extends Controller
         ]);
 
         $checkoutUrl = $this->sprintpayPaymentPageUrl($webkey, (int) $amount, $ref, $user->email);
+
+        SprintpayLogger::info('redirect', 'Customer redirected to SprintPay payment page.', [
+            'user_id' => $user->id,
+            'email' => $user->email,
+            'ref' => $ref,
+            'amount' => (int) $amount,
+            'checkout_url' => $checkoutUrl,
+        ]);
 
         return redirect()->away($checkoutUrl);
     }
@@ -254,13 +264,16 @@ class FundingController extends Controller
         $webkey = $this->getSprintpayWebkey();
 
         if (!$webkey) {
+            SprintpayLogger::warning('virtual_account', 'Credit blocked: SprintPay webkey not configured.');
             return response()->json(['status' => false, 'message' => 'SprintPay is not configured.'], 422);
         }
 
         $amount = (int) $request->input('amount');
         $ref = $this->makeSprintpayRef($user);
 
-        $response = Http::post($this->sprintpayUrl('/api/get-account/wvn'), [
+        $apiUrl = $this->sprintpayUrl('/api/get-account/wvn');
+
+        $response = Http::post($apiUrl, [
             'key' => $webkey,
             'email' => $user->email,
             'amount' => $amount,
@@ -270,7 +283,15 @@ class FundingController extends Controller
         $result = $response->json();
 
         if (!($result['status'] ?? false)) {
-            Log::warning('SprintPay virtual account generation failed', ['response' => $result]);
+            SprintpayLogger::warning('virtual_account', 'Failed to generate virtual account — wallet cannot be funded yet.', [
+                'user_id' => $user->id,
+                'email' => $user->email,
+                'ref' => $ref,
+                'amount' => $amount,
+                'api_url' => $apiUrl,
+                'http_status' => $response->status(),
+                'response' => $result,
+            ]);
             return response()->json([
                 'status' => false,
                 'message' => $result['message'] ?? 'Unable to generate virtual account.',
@@ -280,6 +301,16 @@ class FundingController extends Controller
         session([
             'sprintpay_ref' => $ref,
             'sprintpay_amount' => $amount,
+        ]);
+
+        SprintpayLogger::info('virtual_account', 'Virtual account generated; awaiting bank transfer.', [
+            'user_id' => $user->id,
+            'email' => $user->email,
+            'ref' => $ref,
+            'amount' => $amount,
+            'amount_to_pay' => $result['amount_to_pay'] ?? null,
+            'account_no' => $result['account_no'] ?? null,
+            'bank_name' => $result['bank_name'] ?? null,
         ]);
 
         return response()->json([
@@ -297,23 +328,38 @@ class FundingController extends Controller
         $ref = $request->input('ref') ?? session('sprintpay_ref');
 
         if (!$ref) {
+            SprintpayLogger::warning('verify', 'Credit blocked: no payment reference in request or session.', [
+                'user_id' => Auth::id(),
+            ]);
             return response()->json(['status' => false, 'message' => 'No pending payment found.'], 404);
         }
 
         if (Transaction::where('reference', $ref)->exists()) {
+            SprintpayLogger::info('verify', 'Payment already credited (duplicate verify request).', [
+                'user_id' => Auth::id(),
+                'ref' => $ref,
+            ]);
             return response()->json(['status' => true, 'message' => 'completed', 'credited' => true]);
         }
 
-        $data = $this->verifySprintpayTransaction($ref);
+        [$data, $verifyMeta] = $this->verifySprintpayTransaction($ref);
 
         if (!$data) {
+            SprintpayLogger::warning('verify', 'Credit blocked: SprintPay reports payment not completed.', [
+                'user_id' => Auth::id(),
+                'ref' => $ref,
+                'verify' => $verifyMeta,
+            ]);
             return response()->json(['status' => false, 'message' => 'Payment not completed yet.']);
         }
 
         $user = Auth::user();
         $amount = $data['amount'] ?? session('sprintpay_amount');
 
-        $this->creditWallet($user, $amount, $ref, 'sprintpay');
+        if (!$this->creditSprintpayWallet($user, $amount, $ref, 'verify')) {
+            return response()->json(['status' => false, 'message' => 'Unable to credit wallet. Check admin logs.'], 500);
+        }
+
         session()->forget(['sprintpay_ref', 'sprintpay_amount']);
 
         return response()->json([
@@ -329,6 +375,9 @@ class FundingController extends Controller
         $ref = session('sprintpay_ref');
 
         if (!$ref) {
+            SprintpayLogger::warning('callback', 'Credit blocked: payment session expired (no ref in session).', [
+                'user_id' => Auth::id(),
+            ]);
             return redirect()->route('funding.show')->with('error', 'Payment session expired.');
         }
 
@@ -337,17 +386,25 @@ class FundingController extends Controller
             return redirect()->route('funding.show')->with('success', 'Wallet funded successfully.');
         }
 
-        $data = $this->verifySprintpayTransaction($ref);
+        [$data, $verifyMeta] = $this->verifySprintpayTransaction($ref);
 
         if ($data) {
             $amount = $data['amount'] ?? session('sprintpay_amount');
             $user = Auth::user();
 
-            $this->creditWallet($user, $amount, $ref, 'sprintpay');
-            session()->forget(['sprintpay_ref', 'sprintpay_amount']);
+            if ($this->creditSprintpayWallet($user, $amount, $ref, 'callback')) {
+                session()->forget(['sprintpay_ref', 'sprintpay_amount']);
+                return redirect()->route('funding.show')->with('success', 'Wallet funded successfully.');
+            }
 
-            return redirect()->route('funding.show')->with('success', 'Wallet funded successfully.');
+            return redirect()->route('funding.show')->with('error', 'Payment verified but wallet credit failed. Contact support.');
         }
+
+        SprintpayLogger::warning('callback', 'Credit blocked: SprintPay reports payment not completed on return.', [
+            'user_id' => Auth::id(),
+            'ref' => $ref,
+            'verify' => $verifyMeta,
+        ]);
 
         return redirect()->route('funding.show')->with('error', 'Payment not completed yet. If you have paid, your wallet will be credited shortly.');
     }
@@ -359,7 +416,10 @@ class FundingController extends Controller
         if ($webhookSecret) {
             $auth = $request->header('Authorization', '');
             if ($auth !== 'Bearer ' . $webhookSecret) {
-                Log::warning('SprintPay webhook: invalid authorization');
+                SprintpayLogger::warning('webhook', 'Credit blocked: invalid webhook authorization header.', [
+                    'ip' => $request->ip(),
+                    'has_auth_header' => $auth !== '',
+                ]);
                 return response()->json(['status' => false], 401);
             }
         }
@@ -369,11 +429,29 @@ class FundingController extends Controller
         $email = $payload['email'] ?? null;
         $amount = $payload['amount'] ?? 0;
 
+        SprintpayLogger::info('webhook', 'Webhook received from SprintPay.', [
+            'ref' => $ref,
+            'email' => $email,
+            'amount' => $amount,
+            'event' => $payload['event'] ?? null,
+            'session_id' => $payload['session_id'] ?? null,
+        ]);
+
         if (!$ref || !$email || !$amount) {
+            SprintpayLogger::warning('webhook', 'Credit blocked: missing required webhook fields.', [
+                'ref' => $ref,
+                'email' => $email,
+                'amount' => $amount,
+                'payload_keys' => array_keys($payload),
+            ]);
             return response()->json(['status' => false], 422);
         }
 
         if (Transaction::where('reference', $ref)->exists()) {
+            SprintpayLogger::info('webhook', 'Webhook ignored: transaction already credited.', [
+                'ref' => $ref,
+                'email' => $email,
+            ]);
             return response()->json(['status' => true]);
         }
 
@@ -384,13 +462,64 @@ class FundingController extends Controller
         }
 
         if (!$user) {
-            Log::warning('SprintPay webhook: user not found', ['ref' => $ref, 'email' => $email]);
+            SprintpayLogger::warning('webhook', 'Credit blocked: user not found for webhook email/ref.', [
+                'ref' => $ref,
+                'email' => $email,
+                'amount' => $amount,
+            ]);
             return response()->json(['status' => false], 404);
         }
 
-        $this->creditWallet($user, $amount, $ref, 'sprintpay');
+        if (!$this->creditSprintpayWallet($user, $amount, $ref, 'webhook')) {
+            return response()->json(['status' => false], 500);
+        }
 
         return response()->json(['status' => true]);
+    }
+
+    private function creditSprintpayWallet(User $user, float $amount, string $reference, string $source): bool
+    {
+        if ($amount <= 0) {
+            SprintpayLogger::warning($source, 'Credit blocked: invalid amount.', [
+                'user_id' => $user->id,
+                'email' => $user->email,
+                'ref' => $reference,
+                'amount' => $amount,
+            ]);
+            return false;
+        }
+
+        if (Transaction::where('reference', $reference)->exists()) {
+            SprintpayLogger::info($source, 'Credit skipped: transaction reference already exists.', [
+                'user_id' => $user->id,
+                'ref' => $reference,
+            ]);
+            return true;
+        }
+
+        try {
+            $this->creditWallet($user, $amount, $reference, 'sprintpay');
+
+            SprintpayLogger::info($source, 'Wallet credited successfully.', [
+                'user_id' => $user->id,
+                'email' => $user->email,
+                'ref' => $reference,
+                'amount' => $amount,
+                'new_wallet_balance' => $user->fresh()->wallet,
+            ]);
+
+            return true;
+        } catch (\Throwable $e) {
+            SprintpayLogger::error($source, 'Credit failed: exception while crediting wallet.', [
+                'user_id' => $user->id,
+                'email' => $user->email,
+                'ref' => $reference,
+                'amount' => $amount,
+                'exception' => $e->getMessage(),
+            ]);
+
+            return false;
+        }
     }
 
     private function creditWallet(User $user, float $amount, string $reference, string $method): void
@@ -460,19 +589,39 @@ class FundingController extends Controller
         return 'SPAY_' . $user->id . '_' . strtoupper(Str::random(10));
     }
 
-    private function verifySprintpayTransaction(string $ref): ?array
+    private function verifySprintpayTransaction(string $ref): array
     {
-        $response = Http::get($this->sprintpayUrl('/api/verify-transaction'), [
-            'ref' => $ref,
-        ]);
+        $apiUrl = $this->sprintpayUrl('/api/verify-transaction');
 
-        $result = $response->json();
+        try {
+            $response = Http::timeout(30)->get($apiUrl, ['ref' => $ref]);
+            $result = $response->json() ?? [];
+            $meta = [
+                'api_url' => $apiUrl,
+                'http_status' => $response->status(),
+                'status' => $result['status'] ?? null,
+                'message' => $result['message'] ?? null,
+                'data' => $result['data'] ?? null,
+            ];
 
-        if (($result['status'] ?? false) === true && ($result['message'] ?? '') === 'completed') {
-            return $result['data'] ?? [];
+            if (($result['status'] ?? false) === true && ($result['message'] ?? '') === 'completed') {
+                return [$result['data'] ?? [], $meta];
+            }
+
+            return [null, $meta];
+        } catch (\Throwable $e) {
+            $meta = [
+                'api_url' => $apiUrl,
+                'exception' => $e->getMessage(),
+            ];
+
+            SprintpayLogger::error('verify_api', 'SprintPay verify-transaction request failed.', [
+                'ref' => $ref,
+                'verify' => $meta,
+            ]);
+
+            return [null, $meta];
         }
-
-        return null;
     }
 
     public function handlePaymentpointWebhook(Request $request)
