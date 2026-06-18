@@ -29,12 +29,10 @@ class AdminLogController extends Controller
             $selected = $files->first();
         }
 
-        $content = '';
         $lines = collect();
 
         if ($selected && File::exists($this->logsPath . '/' . $selected)) {
             $raw = File::get($this->logsPath . '/' . $selected);
-            $content = $raw;
             $lines = collect(explode("\n", $raw))
                 ->filter()
                 ->reverse()
@@ -54,5 +52,25 @@ class AdminLogController extends Controller
             'lines' => $lines,
             'search' => $search,
         ]);
+    }
+
+    public function clear(Request $request)
+    {
+        $file = basename($request->input('file', ''));
+
+        if ($file === '' || !str_ends_with($file, '.log')) {
+            return back()->with('error', 'Invalid log file.');
+        }
+
+        $path = $this->logsPath . '/' . $file;
+
+        if (!File::exists($path)) {
+            return back()->with('error', 'Log file not found.');
+        }
+
+        File::put($path, '');
+
+        return redirect()->route('admin.logs', ['file' => $file])
+            ->with('success', "Log file cleared: {$file}");
     }
 }

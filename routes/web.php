@@ -265,6 +265,7 @@ Route::prefix('admin')->name('admin.')->group(function () {
         Route::post('/manual-fundings/{id}/approve', [AdminController::class, 'approveManualFunding'])->name('manual-fundings.approve');
         Route::post('/manual-fundings/{id}/reject', [AdminController::class, 'rejectManualFunding'])->name('manual-fundings.reject');
         Route::get('/logs', [AdminLogController::class, 'index'])->name('logs');
+        Route::post('/logs/clear', [AdminLogController::class, 'clear'])->name('logs.clear');
     });
 });
 Route::view('/privacy', 'privacy')->name('privacy');

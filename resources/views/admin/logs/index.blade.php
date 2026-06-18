@@ -2,15 +2,34 @@
 
 @section('content')
 <div class="space-y-4">
-    <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-        <div>
-            <h1 class="text-xl font-bold text-gray-900">Log Viewer</h1>
-            <p class="text-sm text-gray-500 mt-0.5">Browse application logs. SprintPay funding issues are in <code class="text-xs bg-gray-100 px-1 rounded">sprintpay-*.log</code>.</p>
+    @if(session('success'))
+        <div class="bg-green-50 border border-green-300 text-green-800 px-4 py-3 rounded-lg text-sm">
+            {{ session('success') }}
         </div>
-        @if($selected)
-            <a href="{{ route('admin.logs', ['file' => $selected]) }}"
-               class="text-sm text-blue-600 hover:text-blue-800">↻ Refresh</a>
-        @endif
+    @endif
+    @if(session('error'))
+        <div class="bg-red-50 border border-red-300 text-red-800 px-4 py-3 rounded-lg text-sm">
+            {{ session('error') }}
+        </div>
+    @endif
+
+    <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+        <h1 class="text-xl font-bold text-gray-900">Log Viewer</h1>
+        <div class="flex items-center gap-3">
+            @if($selected)
+                <a href="{{ route('admin.logs', ['file' => $selected]) }}"
+                   class="text-sm text-blue-600 hover:text-blue-800">↻ Refresh</a>
+                <form method="POST" action="{{ route('admin.logs.clear') }}"
+                      onsubmit="return confirm('Clear all entries in {{ $selected }}?')">
+                    @csrf
+                    <input type="hidden" name="file" value="{{ $selected }}">
+                    <button type="submit"
+                            class="px-3 py-1.5 bg-red-600 text-white text-sm rounded-lg hover:bg-red-700">
+                        Clear Log
+                    </button>
+                </form>
+            @endif
+        </div>
     </div>
 
     <div class="grid lg:grid-cols-4 gap-4">
