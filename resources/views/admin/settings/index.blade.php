@@ -157,6 +157,13 @@
                                     value="{{ $sprintpayWebkey }}">
                             </div>
                             <div>
+                                <label class="block text-xs font-medium text-gray-600 mb-1">API Base URL</label>
+                                <input type="url" name="sprintpay_base_url" placeholder="https://web.sprintpay.online"
+                                    class="w-full border border-gray-300 px-3 py-2 rounded-lg text-sm focus:ring-2 focus:ring-blue-400 focus:border-blue-400"
+                                    value="{{ $sprintpayBaseUrl }}">
+                                <p class="text-xs text-gray-400 mt-1">Use <code class="text-gray-500">https://web.sprintpay.online</code> (not web.enkpay.com).</p>
+                            </div>
+                            <div>
                                 <label class="block text-xs font-medium text-gray-600 mb-1">Webhook Secret</label>
                                 <input type="text" name="sprintpay_webhook_secret" class="w-full border border-gray-300 px-3 py-2 rounded-lg text-sm focus:ring-2 focus:ring-blue-400 focus:border-blue-400"
                                     value="{{ $sprintpayWebhookSecret }}">

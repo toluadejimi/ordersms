@@ -82,6 +82,7 @@ return [
 ],
 
 'sprintpay' => [
+    'base_url' => env('SPRINTPAY_BASE_URL', 'https://web.sprintpay.online'),
     'webkey' => env('SPRINTPAY_WEBKEY'),
     'webhook_secret' => env('SPRINTPAY_WEBHOOK_SECRET'),
 ],

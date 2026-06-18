@@ -239,7 +239,7 @@ class FundingController extends Controller
             'sprintpay_amount' => $amount,
         ]);
 
-        $response = Http::post('https://web.sprintpay.online/api/pay', [
+        $response = Http::post($this->sprintpayUrl('/api/pay'), [
             'key' => $webkey,
             'amount' => (int) $amount,
             'email' => $user->email,
@@ -273,7 +273,7 @@ class FundingController extends Controller
         $amount = (int) $request->input('amount');
         $ref = $this->makeSprintpayRef($user);
 
-        $response = Http::post('https://web.sprintpay.online/api/get-account/wvn', [
+        $response = Http::post($this->sprintpayUrl('/api/get-account/wvn'), [
             'key' => $webkey,
             'email' => $user->email,
             'amount' => $amount,
@@ -446,6 +446,16 @@ class FundingController extends Controller
         return Setting::get('sprintpay_webkey') ?? config('services.sprintpay.webkey');
     }
 
+    private function sprintpayUrl(string $path): string
+    {
+        $base = rtrim(
+            Setting::get('sprintpay_base_url') ?? config('services.sprintpay.base_url', 'https://web.sprintpay.online'),
+            '/'
+        );
+
+        return $base . $path;
+    }
+
     private function makeSprintpayRef(User $user): string
     {
         return 'SPAY_' . $user->id . '_' . strtoupper(Str::random(10));
@@ -453,7 +463,7 @@ class FundingController extends Controller
 
     private function verifySprintpayTransaction(string $ref): ?array
     {
-        $response = Http::get('https://web.sprintpay.online/api/verify-transaction', [
+        $response = Http::get($this->sprintpayUrl('/api/verify-transaction'), [
             'ref' => $ref,
         ]);
 

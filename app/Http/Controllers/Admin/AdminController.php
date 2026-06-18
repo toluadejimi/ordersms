@@ -206,6 +206,7 @@ public function settings()
 
         // SprintPay
         'sprintpayWebkey'        => Setting::get('sprintpay_webkey'),
+        'sprintpayBaseUrl'       => Setting::get('sprintpay_base_url') ?? config('services.sprintpay.base_url', 'https://web.sprintpay.online'),
         'sprintpayWebhookSecret' => Setting::get('sprintpay_webhook_secret'),
         'sprintpayEnabled'       => Setting::get('sprintpay_enabled') === '1',
         'sprintpayWebhookUrl'    => url('/api/webhook/sprintpay'),
@@ -275,6 +276,7 @@ public function updateSettings(Request $request)
 
         // SprintPay
         'sprintpay_webkey',
+        'sprintpay_base_url',
         'sprintpay_webhook_secret',
 
         // SMSMan
