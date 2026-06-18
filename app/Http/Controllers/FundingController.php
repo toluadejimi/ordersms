@@ -239,22 +239,9 @@ class FundingController extends Controller
             'sprintpay_amount' => $amount,
         ]);
 
-        $response = Http::post($this->sprintpayUrl('/api/pay'), [
-            'key' => $webkey,
-            'amount' => (int) $amount,
-            'email' => $user->email,
-            'ref' => $ref,
-        ]);
+        $checkoutUrl = $this->sprintpayPaymentPageUrl($webkey, (int) $amount, $ref, $user->email);
 
-        $result = $response->json();
-
-        if (($result['status'] ?? false) && !empty($result['data'])) {
-            return redirect()->away($result['data']);
-        }
-
-        Log::warning('SprintPay payment initiation failed', ['response' => $result]);
-
-        return back()->with('error', $result['message'] ?? 'Unable to initiate SprintPay payment.');
+        return redirect()->away($checkoutUrl);
     }
 
     public function sprintpayVirtualAccount(Request $request)
@@ -454,6 +441,18 @@ class FundingController extends Controller
         );
 
         return $base . $path;
+    }
+
+    private function sprintpayPaymentPageUrl(string $webkey, int $amount, string $ref, string $email): string
+    {
+        $query = http_build_query([
+            'amount' => $amount,
+            'key' => $webkey,
+            'ref' => $ref,
+            'email' => $email,
+        ]);
+
+        return $this->sprintpayUrl('/pay') . '?' . $query;
     }
 
     private function makeSprintpayRef(User $user): string
