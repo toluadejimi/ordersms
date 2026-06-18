@@ -339,7 +339,7 @@
                         }
                      }"
                      x-init="return () => stopPolling()">
-                    <p class="text-sm text-gray-600">Generate a one-time bank account and transfer the exact amount shown. Your wallet is credited automatically after payment.</p>
+                    <p class="text-sm text-gray-600">Enter an amount and continue to SprintPay to complete your payment. Your wallet is credited automatically after payment.</p>
 
                     <div x-show="error" class="bg-red-50 border-l-4 border-red-400 p-4 rounded-lg">
                         <p class="text-sm text-red-700" x-text="error"></p>
@@ -360,11 +360,21 @@
                                     placeholder="5000">
                             </div>
                         </div>
-                        <button type="button" @click="generateAccount()" :disabled="loading || !amount || amount < 100"
-                            class="w-full flex justify-center items-center px-6 py-3.5 rounded-lg font-medium text-white bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors">
-                            <span x-show="!loading">Generate Bank Account</span>
-                            <span x-show="loading">Generating...</span>
-                        </button>
+                        <form method="POST" action="{{ route('funding.sprintpay.redirect') }}">
+                            @csrf
+                            <input type="hidden" name="amount" x-bind:value="amount">
+                            <button type="submit" :disabled="!amount || amount < 100"
+                                class="w-full flex justify-center items-center px-6 py-3.5 rounded-lg font-medium text-white bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors">
+                                Continue
+                            </button>
+                        </form>
+                        <div class="border-t border-gray-200 pt-4 text-center">
+                            <button type="button" @click="generateAccount()" :disabled="loading || !amount || amount < 100"
+                                class="text-sm text-indigo-600 hover:text-indigo-800 disabled:text-gray-400 disabled:cursor-not-allowed">
+                                <span x-show="!loading">Generate Account</span>
+                                <span x-show="loading">Generating...</span>
+                            </button>
+                        </div>
                     </div>
 
                     <div x-show="account" class="bg-blue-50 border-l-4 border-blue-500 p-6 rounded-lg space-y-4">
@@ -406,18 +416,6 @@
                             </button>
                         </div>
                         <p x-show="polling" class="text-xs text-gray-500 text-center">Auto-checking payment status every 15 seconds...</p>
-                    </div>
-
-                    <div class="border-t border-gray-200 pt-4">
-                        <p class="text-xs text-gray-500 mb-3">Prefer SprintPay's hosted payment page?</p>
-                        <form method="POST" action="{{ route('funding.sprintpay.redirect') }}">
-                            @csrf
-                            <input type="hidden" name="amount" x-bind:value="amount">
-                            <button type="submit" :disabled="!amount || amount < 100"
-                                class="text-sm text-indigo-600 hover:text-indigo-800 disabled:text-gray-400 disabled:cursor-not-allowed">
-                                Continue to SprintPay payment page →
-                            </button>
-                        </form>
                     </div>
                 </div>
                 @endif
