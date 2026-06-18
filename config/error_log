@@ -1,0 +1,24 @@
+[01-Jun-2025 15:01:21 UTC] PHP Fatal error:  Uncaught Error: Call to undefined function env() in /home/chokesms/public_html/config/services.php:18
+Stack trace:
+#0 {main}
+  thrown in /home/chokesms/public_html/config/services.php on line 18
+[01-Jun-2025 15:02:15 UTC] PHP Fatal error:  Uncaught Error: Call to undefined function env() in /home/chokesms/public_html/config/app.php:16
+Stack trace:
+#0 {main}
+  thrown in /home/chokesms/public_html/config/app.php on line 16
+[01-Jun-2025 15:05:43 UTC] PHP Fatal error:  Uncaught Error: Call to undefined function env() in /home/chokesms/public_html/config/mail.php:17
+Stack trace:
+#0 {main}
+  thrown in /home/chokesms/public_html/config/mail.php on line 17
+[01-Jun-2025 15:07:53 UTC] PHP Fatal error:  Uncaught Error: Call to undefined function env() in /home/chokesms/public_html/config/auth.php:17
+Stack trace:
+#0 {main}
+  thrown in /home/chokesms/public_html/config/auth.php on line 17
+[01-Jun-2025 15:08:16 UTC] PHP Fatal error:  Uncaught Error: Call to undefined function env() in /home/chokesms/public_html/config/cache.php:18
+Stack trace:
+#0 {main}
+  thrown in /home/chokesms/public_html/config/cache.php on line 18
+[01-Jun-2025 15:08:36 UTC] PHP Fatal error:  Uncaught Error: Call to undefined function env() in /home/chokesms/public_html/config/filesystems.php:16
+Stack trace:
+#0 {main}
+  thrown in /home/chokesms/public_html/config/filesystems.php on line 16

@@ -1,0 +1,4 @@
+[01-Jun-2025 15:03:51 UTC] PHP Fatal error:  Uncaught Error: Class "Illuminate\Support\Facades\Route" not found in /home/chokesms/public_html/routes/api.php:21
+Stack trace:
+#0 {main}
+  thrown in /home/chokesms/public_html/routes/api.php on line 21
