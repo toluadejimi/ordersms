@@ -172,7 +172,7 @@
                                 <label class="block text-xs font-medium text-gray-600 mb-1">Fund URL (webhook)</label>
                                 <input type="text" readonly class="w-full border border-gray-200 bg-gray-50 px-3 py-2 rounded-lg text-sm text-gray-600"
                                     value="{{ $sprintpayWebhookUrl }}">
-                                <p class="text-xs text-gray-400 mt-1">Set as Fund URL in SprintPay webkey settings.</p>
+                                <p class="text-xs text-gray-400 mt-1">Set as Fund URL in SprintPay webkey settings. SprintPay may send the secret as a raw Authorization value (no Bearer prefix) — both are supported.</p>
                             </div>
                             <div>
                                 <label class="block text-xs font-medium text-gray-600 mb-1">Verify URL (callback)</label>

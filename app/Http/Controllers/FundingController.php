@@ -372,7 +372,9 @@ class FundingController extends Controller
 
     public function sprintpayCallback(Request $request)
     {
-        $ref = session('sprintpay_ref');
+        $ref = $request->query('ref')
+            ?? $request->query('order_id')
+            ?? session('sprintpay_ref');
 
         if (!$ref) {
             SprintpayLogger::warning('callback', 'Credit blocked: payment session expired (no ref in session).', [
@@ -391,6 +393,17 @@ class FundingController extends Controller
         if ($data) {
             $amount = $data['amount'] ?? session('sprintpay_amount');
             $user = Auth::user();
+
+            if (!$user && preg_match('/^SPAY_(\d+)_/', $ref, $matches)) {
+                $user = User::find($matches[1]);
+            }
+
+            if (!$user) {
+                SprintpayLogger::warning('callback', 'Credit blocked: user not logged in and ref has no matching user.', [
+                    'ref' => $ref,
+                ]);
+                return redirect()->route('funding.show')->with('error', 'Please log in to complete wallet funding.');
+            }
 
             if ($this->creditSprintpayWallet($user, $amount, $ref, 'callback')) {
                 session()->forget(['sprintpay_ref', 'sprintpay_amount']);
@@ -413,21 +426,18 @@ class FundingController extends Controller
     {
         $webhookSecret = Setting::get('sprintpay_webhook_secret') ?? config('services.sprintpay.webhook_secret');
 
-        if ($webhookSecret) {
-            $auth = $request->header('Authorization', '');
-            if ($auth !== 'Bearer ' . $webhookSecret) {
-                SprintpayLogger::warning('webhook', 'Credit blocked: invalid webhook authorization header.', [
-                    'ip' => $request->ip(),
-                    'has_auth_header' => $auth !== '',
-                ]);
-                return response()->json(['status' => false], 401);
-            }
+        if ($webhookSecret && !$this->isValidSprintpayWebhookAuth($request->header('Authorization', ''), $webhookSecret)) {
+            SprintpayLogger::warning('webhook', 'Credit blocked: invalid webhook authorization header.', [
+                'ip' => $request->ip(),
+                'auth_format' => str_starts_with(trim($request->header('Authorization', '')), 'Bearer ') ? 'bearer' : 'raw',
+            ]);
+            return response()->json(['status' => false], 401);
         }
 
         $payload = $request->all();
         $ref = $payload['order_id'] ?? $payload['ref'] ?? null;
         $email = $payload['email'] ?? null;
-        $amount = $payload['amount'] ?? 0;
+        $amount = (float) ($payload['amount'] ?? $payload['amount_settled'] ?? 0);
 
         SprintpayLogger::info('webhook', 'Webhook received from SprintPay.', [
             'ref' => $ref,
@@ -437,7 +447,7 @@ class FundingController extends Controller
             'session_id' => $payload['session_id'] ?? null,
         ]);
 
-        if (!$ref || !$email || !$amount) {
+        if (!$ref || !$amount) {
             SprintpayLogger::warning('webhook', 'Credit blocked: missing required webhook fields.', [
                 'ref' => $ref,
                 'email' => $email,
@@ -447,7 +457,7 @@ class FundingController extends Controller
             return response()->json(['status' => false], 422);
         }
 
-        if (Transaction::where('reference', $ref)->exists()) {
+        if (Transaction::where('reference', $ref)->where('type', 'funding')->exists()) {
             SprintpayLogger::info('webhook', 'Webhook ignored: transaction already credited.', [
                 'ref' => $ref,
                 'email' => $email,
@@ -455,7 +465,11 @@ class FundingController extends Controller
             return response()->json(['status' => true]);
         }
 
-        $user = User::where('email', $email)->first();
+        $user = null;
+
+        if ($email) {
+            $user = User::where('email', $email)->first();
+        }
 
         if (!$user && preg_match('/^SPAY_(\d+)_/', $ref, $matches)) {
             $user = User::find($matches[1]);
@@ -475,6 +489,26 @@ class FundingController extends Controller
         }
 
         return response()->json(['status' => true]);
+    }
+
+    private function isValidSprintpayWebhookAuth(string $header, string $secret): bool
+    {
+        $header = trim($header);
+        $secret = trim($secret);
+
+        if ($header === '') {
+            return false;
+        }
+
+        if (hash_equals($secret, $header)) {
+            return true;
+        }
+
+        if (preg_match('/^Bearer\s+(.+)$/i', $header, $matches)) {
+            return hash_equals($secret, trim($matches[1]));
+        }
+
+        return false;
     }
 
     private function creditSprintpayWallet(User $user, float $amount, string $reference, string $source): bool

@@ -23,6 +23,14 @@ class SprintpayLogger
 
     private static function write(string $level, string $event, string $message, array $context): void
     {
-        Log::channel('sprintpay')->{$level}("[{$event}] {$message}", $context);
+        $line = "[{$event}] {$message}";
+
+        try {
+            Log::channel('sprintpay')->{$level}($line, $context);
+        } catch (\Throwable) {
+            Log::{$level}("[SprintPay] {$line}", $context);
+        }
+
+        Log::{$level}("[SprintPay] {$line}", $context);
     }
 }
